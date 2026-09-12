@@ -3,6 +3,13 @@ services:
     extends:
       file: ./HeHongManage/docker-compose.yml
       service: web
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     build:
       context: ./HeHongManage
     volumes:
@@ -67,6 +74,17 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在外层 .env 中配置 MYSQL_ROOT_PASSWORD}
     volumes:
       - ./data/mysql:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          MYSQL_PWD="$${MYSQL_PASSWORD}" mysql --connect-timeout=5 --protocol=TCP
+          -h127.0.0.1 -u"$${MYSQL_USER}" "$${MYSQL_DATABASE}"
+          --batch --skip-column-names -e "SELECT 1" >/dev/null
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
 
   redis:
     image: ${REDIS_IMAGE}
@@ -76,6 +94,12 @@ services:
       --appendonly yes
     volumes:
       - ./data/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", '[ "$$(redis-cli ping)" = PONG ]']
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
 
   rabbitmq:
     image: ${RABBITMQ_IMAGE}
@@ -87,6 +111,14 @@ services:
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
     volumes:
       - ./data/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - rabbitmq-diagnostics -q -t 5 check_running && rabbitmq-diagnostics -q -t 5 check_port_connectivity
+      interval: 5s
+      timeout: 15s
+      retries: 60
+      start_period: 30s
 
   nginx:
     image: ${NGINX_IMAGE}
@@ -97,6 +129,9 @@ services:
       - ./HeHongfrontend/dist:/usr/share/nginx/html:ro
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - web
-      - flower
-      - mcp-server
+      web:
+        condition: service_healthy
+      flower:
+        condition: service_started
+      mcp-server:
+        condition: service_started

@@ -7,7 +7,7 @@ cd -- "$project_dir"
 compose=(docker compose --project-directory "$project_dir" --file "$project_dir/docker-compose.yml")
 middleware=(mysql redis rabbitmq)
 backend=(web worker beat flower mcp-server)
-wait_timeout=300
+mysql_log_pid=''
 
 fail() { echo "部署失败：$*" >&2; exit 1; }
 trap 'echo "部署未完成。" >&2' ERR
@@ -31,47 +31,23 @@ docker info >/dev/null
     exec python ./config_check.py --require-pro
 '
 
-mysql_ready() {
-    "${compose[@]}" exec -T mysql sh -c '
-        MYSQL_PWD="$MYSQL_PASSWORD" mysql --connect-timeout=5 --protocol=TCP \
-            -h127.0.0.1 -u"$MYSQL_USER" "$MYSQL_DATABASE" \
-            --batch --skip-column-names -e "SELECT 1"
-    ' >/dev/null 2>&1
+stop_mysql_logs() {
+    if [ -n "$mysql_log_pid" ]; then
+        kill "$mysql_log_pid" 2>/dev/null || true
+        wait "$mysql_log_pid" 2>/dev/null || true
+        mysql_log_pid=''
+    fi
 }
-
-redis_ready() {
-    local response
-    response=$("${compose[@]}" exec -T redis redis-cli ping 2>/dev/null) || return 1
-    [ "${response//$'\r'/}" = PONG ]
-}
-
-rabbitmq_ready() {
-    "${compose[@]}" exec -T rabbitmq rabbitmq-diagnostics -q -t 5 check_running >/dev/null 2>&1 &&
-    "${compose[@]}" exec -T rabbitmq rabbitmq-diagnostics -q -t 5 check_port_connectivity >/dev/null 2>&1
-}
-
-web_ready() {
-    "${compose[@]}" exec -T web python -c \
-        'import socket; socket.create_connection(("127.0.0.1", 81), timeout=3).close()' >/dev/null 2>&1
-}
-
-wait_ready() {
-    local service="$1" started=$SECONDS
-    echo "等待 $service 就绪（最多 ${wait_timeout} 秒）……"
-    until "${service}_ready"; do
-        if (( SECONDS - started >= wait_timeout )); then
-            "${compose[@]}" ps "$service" || true
-            fail "$service 等待就绪超时。"
-        fi
-        sleep 2
-    done
-}
+trap stop_mysql_logs EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 deploy_middleware() {
-    "${compose[@]}" up -d --no-deps "${middleware[@]}"
-    for service in "${middleware[@]}"; do
-        wait_ready "$service"
-    done
+    local log_since
+    log_since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    "${compose[@]}" up -d "${middleware[@]}"
+    "${compose[@]}" logs --follow --since "$log_since" mysql &
+    mysql_log_pid=$!
 }
 
 deploy_backend() {
@@ -82,7 +58,6 @@ deploy_backend() {
         "GIT_CONFIG_KEY_${git_config_count}=safe.directory" \
         "GIT_CONFIG_VALUE_${git_config_count}=$backend_dir" \
         bash "$backend_dir/deploy.sh"
-    wait_ready web
 }
 
 update_frontend() {
@@ -92,11 +67,12 @@ update_frontend() {
 
 deploy_frontend() {
     update_frontend
-    "${compose[@]}" up -d --no-deps nginx
+    "${compose[@]}" up -d --wait --wait-timeout 300 nginx
 }
 
 deploy_middleware
 deploy_backend
 deploy_frontend
+stop_mysql_logs
 "${compose[@]}" ps "${middleware[@]}" "${backend[@]}" nginx
 echo '部署完成。'

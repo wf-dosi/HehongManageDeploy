@@ -97,15 +97,16 @@ bash deploy.sh
 
 ### 第二步：启动中间件
 
-启动 `mysql`、`redis`、`rabbitmq`，分别检查数据库查询、Redis 响应及 RabbitMQ 运行状态。中间件就绪后才进入后端部署阶段。
+启动 `mysql`、`redis`、`rabbitmq`，实时显示本次部署的 MySQL 容器日志。中间件的健康检查由 Compose 管理；后端代码更新和构建可以同时进行，Web 等三个中间件健康后才启动。
 
 ### 第三步：更新并启动后端
 
 外层调用 `HeHongManage/deploy.sh`。后端脚本检测到父目录 Compose 后，使用外层部署配置执行：
 
 1. 拉取 `origin` 的 `HeHongManage` 分支。
-2. 构建镜像并启动 `web`、`worker`、`beat`、`flower`、`mcp-server`。
-3. 由各容器入口启动对应进程。
+2. 构建后端镜像，由 Compose 等待中间件健康后启动 `web`。
+3. 实时显示 Web 初始化、迁移和启动日志。
+4. Web 健康后，Compose 启动 `worker`、`beat`、`flower`、`mcp-server`。
 
 因此，**首次执行总 `deploy.sh` 时，也会先更新后端代码。**
 
@@ -125,9 +126,9 @@ bash deploy.sh
 
 ### 第五步：启动前端入口
 
-外层等待 Web 开始监听，再启动 nginx。nginx 使用现有配置提供 `HeHongfrontend/dist`，并代理后端相关请求。
+nginx 通过 Compose 依赖 Web 健康，以及 Flower、MCP 服务启动。后端部署完成后，外层启动 nginx，使用现有配置提供 `HeHongfrontend/dist`，并代理后端相关请求。
 
-脚本最后显示中间件、后端和 nginx 的容器状态，输出“部署完成”。中间件和 Web 的就绪等待分别按 300 秒超时处理。
+部署期间直接显示 MySQL 和 Web 日志，不再由 Shell 循环检查服务。启动顺序由 `healthcheck` 和 `depends_on` 控制；健康检查参数配置在 Compose 中，后端与 nginx 启动确认使用 `up --wait --wait-timeout 300`。部署结束、失败或中断时会退出日志跟随。最后显示容器状态并输出“部署完成”。
 
 ## 5. 后续版本更新
 
@@ -135,7 +136,7 @@ bash deploy.sh
 bash deploy.sh
 ```
 
-后续更新仍走同一个入口：配置检查 → 中间件就绪 → 更新并启动后端 → Web 后续迁移 → 启动 nginx。
+后续更新仍走同一个入口：配置检查 → 启动中间件并显示日志 → 更新后端 → Compose 按依赖启动 Web 和其余后端服务 → 启动 nginx。Web 后续迁移日志会直接输出。
 
 | 对象 | 再次部署时的处理 |
 | --- | --- |
@@ -171,7 +172,7 @@ Web 容器每次启动都会执行后端入口逻辑，已有安装进入后续�
 | SSH 密钥或仓库访问 | 尚未取得后端代码 | 处理对应错误后执行 `bash install.sh` |
 | 安装阶段 | 可能已生成环境文件或克隆代码，服务尚未由安装脚本启动 | 修复错误后执行 `bash install.sh` |
 | 启动前配置检查 | 后续服务启动步骤未执行 | 完成配置后执行 `bash deploy.sh` |
-| 中间件启动或等待 | 中间件可能已部分运行，后端部署尚未执行 | 查看对应服务日志，修复后执行 `bash deploy.sh` |
+| 中间件启动或健康检查 | 中间件可能已部分运行，Web 尚未通过依赖检查 | 查看对应服务日志，修复后执行 `bash deploy.sh` |
 | 后端更新或初始化 | 中间件已运行，后端可能处于更新或启动过程中 | 查看脚本错误及 Web 日志，修复后执行 `bash deploy.sh` |
 | nginx 启动 | 后端已通过 Web 监听检查 | 查看 nginx 日志，修复后执行 `bash deploy.sh` |
 
