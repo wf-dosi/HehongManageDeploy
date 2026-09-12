@@ -4,10 +4,9 @@ set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 backend_dir="$project_dir/HeHongManage"
 cd -- "$project_dir"
-compose=(docker compose --project-directory "$project_dir" --file "$project_dir/docker-compose.yml")
+compose=(docker compose --ansi never --progress plain --project-directory "$project_dir" --file "$project_dir/docker-compose.yml")
 middleware=(mysql redis rabbitmq)
 backend=(web worker beat flower mcp-server)
-mysql_log_pid=''
 
 fail() { echo "部署失败：$*" >&2; exit 1; }
 trap 'echo "部署未完成。" >&2' ERR
@@ -31,23 +30,15 @@ docker info >/dev/null
     exec python ./config_check.py --require-pro
 '
 
-stop_mysql_logs() {
-    if [ -n "$mysql_log_pid" ]; then
-        kill "$mysql_log_pid" 2>/dev/null || true
-        wait "$mysql_log_pid" 2>/dev/null || true
-        mysql_log_pid=''
-    fi
-}
-trap stop_mysql_logs EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-
 deploy_middleware() {
-    local log_since
+    local log_since status=0
+    echo '启动中间件……'
     log_since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    "${compose[@]}" up -d "${middleware[@]}"
-    "${compose[@]}" logs --follow --since "$log_since" mysql &
-    mysql_log_pid=$!
+    "${compose[@]}" up -d --no-deps --wait --wait-timeout 300 "${middleware[@]}" || status=$?
+    "${compose[@]}" logs --since "$log_since" "${middleware[@]}" || true
+    if [ "$status" -ne 0 ]; then
+        exit "$status"
+    fi
 }
 
 deploy_backend() {
@@ -67,12 +58,12 @@ update_frontend() {
 
 deploy_frontend() {
     update_frontend
-    "${compose[@]}" up -d --wait --wait-timeout 300 nginx
+    echo '启动 nginx……'
+    "${compose[@]}" up -d --no-deps --wait --wait-timeout 300 nginx
 }
 
 deploy_middleware
 deploy_backend
 deploy_frontend
-stop_mysql_logs
 "${compose[@]}" ps "${middleware[@]}" "${backend[@]}" nginx
 echo '部署完成。'
