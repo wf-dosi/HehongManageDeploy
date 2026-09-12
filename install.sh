@@ -1,6 +1,5 @@
 #!/bin/bash
 set -euo pipefail
-export NO_COLOR=1
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 backend_dir="$project_dir/HeHongManage"
