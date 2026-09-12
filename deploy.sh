@@ -10,7 +10,7 @@ if [ ! -f "$project_dir/HeHongfrontend/dist/index.html" ]; then
     exit 1
 fi
 
-docker compose up -d --build mysql redis rabbitmq
+docker compose up -d --build --wait --wait-timeout 300 mysql redis rabbitmq
 
 # 本次调用信任安装时已设置所有者的后端 Git 目录。
 git_config_count=${GIT_CONFIG_COUNT:-0}

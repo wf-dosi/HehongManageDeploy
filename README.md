@@ -92,8 +92,8 @@ bash deploy.sh
 
 外层脚本依次执行：
 
-1. `docker compose up -d --build mysql redis rabbitmq`。
-2. 调用 `HeHongManage/deploy.sh`，由后端完成代码更新、构建和启动。Web 启动后实时跟随最近 100 行及新增日志；健康检查通过后自动结束跟随，再启动其余后端服务。启动失败则结束跟随并停止部署。
+1. `docker compose up -d --build --wait --wait-timeout 300 mysql redis rabbitmq`。
+2. 调用 `HeHongManage/deploy.sh`，由后端完成代码更新、构建和启动。Web 启动后实时显示本次启动日志；检测到 `Booting worker with pid:` 后自动结束跟随，再启动其余后端服务。已有健康容器输出最近 100 行日志后继续。日志中断或等待超过 300 秒仍未出现标记时停止部署。该标记表示 worker 开始启动。
 3. `chmod 755 HeHongfrontend`。
 4. `docker compose up -d --build nginx`。
 
@@ -117,7 +117,7 @@ bash deploy.sh
 bash deploy.sh
 ```
 
-后续更新仍执行上述流程；Web 日志跟随在就绪后自动结束，随后继续部署，无需手动 Ctrl+C。
+后续更新仍执行上述流程；Web 日志跟随在检测到 worker 启动标记后自动结束，随后继续部署，无需手动 Ctrl+C。
 
 | 对象 | 再次部署时的处理 |
 | --- | --- |
