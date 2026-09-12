@@ -85,8 +85,7 @@ install_backend() {
 }
 
 install_frontend() {
-    # 预留前端更新。
-    :
+    mkdir -p -- "$project_dir/HeHongfrontend/dist"
 }
 
 make_outer_env
