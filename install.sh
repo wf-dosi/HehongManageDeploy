@@ -3,7 +3,7 @@ set -euo pipefail
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 backend_dir="$project_dir/HeHongManage"
-backend_repo='git@github.com:wf-dosi/HehongManage.git'
+backend_repo='git@gitee.com:znenghua/hehong_backend.git'
 backend_branch='HeHongManage'
 backend_image='my_flask_app'
 cd -- "$project_dir"
@@ -55,24 +55,12 @@ make_outer_env() (
     echo '已生成外层 .env。'
 )
 
-prepare_github_host() (
-    command -v ssh-keygen >/dev/null || fail '缺少命令：ssh-keygen。'
-    umask 077
-    ssh_dir="$HOME/.ssh"
-    mkdir -p -- "$ssh_dir"
-    # GitHub 官方主机公钥：https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
-    if ! ssh-keygen -F github.com -f "$ssh_dir/known_hosts" >/dev/null 2>&1; then
-        printf '\n%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' >> "$ssh_dir/known_hosts"
-    fi
-)
-
 install_backend() {
     [ ! -L "$backend_dir" ] || fail '后端目录不能是符号链接。'
     if [ -e "$backend_dir" ]; then
         [ -e "$backend_dir/.git" ] || fail "HeHongManage 已存在但不是 Git 仓库。"
         echo '后端代码已存在，跳过克隆。'
     else
-        prepare_github_host
         git clone --depth 1 --branch "$backend_branch" --single-branch "$backend_repo" "$backend_dir"
     fi
     for required in Dockerfile docker-compose.yml deploy.sh make_env.sh config_check.py init.sh; do

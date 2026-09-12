@@ -25,7 +25,7 @@
 
 - Linux、Bash、Git、OpenSSH、Docker Engine 和 Docker Compose v2。
 - Docker 访问权限，以及将后端目录所有者设为 `1000:1000` 的权限。
-- 后端仓库 `git@github.com:wf-dosi/HehongManage.git` 的 SSH 读取权限。
+- 后端仓库 `git@gitee.com:znenghua/hehong_backend.git` 的 SSH 读取权限。
 
 需要生成 SSH 密钥时执行：
 
