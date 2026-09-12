@@ -4,6 +4,11 @@ set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd -- "$project_dir"
 
+if [ ! -f "$project_dir/HeHongfrontend/dist/index.html" ]; then
+    echo '部署失败：缺少 HeHongfrontend/dist/index.html。' >&2
+    exit 1
+fi
+
 docker compose up -d --build mysql redis rabbitmq
 
 # 本次调用信任安装时已设置所有者的后端 Git 目录。
