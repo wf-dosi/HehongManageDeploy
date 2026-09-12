@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+/HeHongManage/
+/HeHongfrontend/
+/data/
+/.idea/
+/.venv/
+__pycache__/
+.pytest_cache/
+/test/
