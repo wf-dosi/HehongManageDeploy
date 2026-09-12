@@ -12,10 +12,15 @@ fi
 start_middleware() (
     services=(mysql redis rabbitmq)
     logs_pid=''
+    command -v timeout >/dev/null || {
+        echo '部署失败：缺少 GNU coreutils 的 timeout 命令。' >&2
+        exit 1
+    }
 
     stop_logs() {
         if [ -n "$logs_pid" ]; then
-            kill "$logs_pid" 2>/dev/null || true
+            # 通知 timeout 终止整个日志进程组；2 秒后仍未退出则强制结束。
+            kill -TERM "$logs_pid" 2>/dev/null || true
             wait "$logs_pid" 2>/dev/null || true
             logs_pid=''
         fi
@@ -35,7 +40,10 @@ start_middleware() (
     fi
 
     echo '正在显示中间件日志，等待健康检查通过（最长 300 秒）…'
-    docker compose logs --follow --tail=100 --timestamps "${services[@]}" &
+    # timeout 管理 Docker CLI 及 Compose 插件子进程，避免直接 kill/wait 卡住。
+    # 不使用 --foreground，否则无法清理日志子进程。
+    timeout --signal=TERM --kill-after=2s 310s \
+        docker compose logs --follow --tail=100 --timestamps "${services[@]}" &
     logs_pid=$!
 
     # 容器已经启动；start --wait 使用 Compose 自身的健康检查等待逻辑。
