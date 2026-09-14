@@ -69,5 +69,5 @@ env "GIT_CONFIG_COUNT=$((git_config_count + 1))" \
     "GIT_CONFIG_VALUE_${git_config_count}=$project_dir/HeHongManage" \
     bash "$project_dir/HeHongManage/deploy.sh"
 
-chmod 755 -- "$project_dir/HeHongfrontend"
-docker compose up -d --build nginx
+docker compose up -d --build --wait --wait-timeout 300 nginx
+chmod -R 755 -- "$project_dir/HeHongfrontend"
